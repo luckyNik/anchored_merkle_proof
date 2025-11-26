@@ -5,7 +5,7 @@ use ark_ec::{AffineRepr, CurveGroup, PrimeGroup, short_weierstrass::Affine};
 use ark_std::test_rng;
 use ark_bn254::{Fr, G1Affine, G1Projective, g1};
 use sha2::{Digest, Sha256};
-use crate::PoseidonMerkleHasher;
+use crate::{LEAVES_POSEIDON_DOMAIN, PoseidonMerkleHasher, split_fq_to_fr};
 
 pub fn generator_setup () -> (G1Affine, G1Affine, G1Affine){
     let first = G1Affine::generator();
@@ -24,7 +24,6 @@ pub fn anchor_setup (secret: &Fr, generator: &G1Affine) -> G1Affine {
 }
 
 pub fn tree_setup(range: u8, anchor: &G1Affine, a: &Fr) -> MerkleTree<PoseidonMerkleHasher> {
-    let domain_tag = Fr::from(1u64);
     let anchor_x_limbs = split_fq_to_fr(&anchor.x().unwrap());
 
     let mut x = BigInteger256::one();
@@ -41,7 +40,7 @@ pub fn tree_setup(range: u8, anchor: &G1Affine, a: &Fr) -> MerkleTree<PoseidonMe
         
         let mut poseidon = Poseidon::<Fr>::new_circom(5).unwrap();
         let hash = poseidon.hash(&[
-            domain_tag, 
+            Fr::from(LEAVES_POSEIDON_DOMAIN), 
             anchor_x_limbs[0], anchor_x_limbs[1], p_x_limbs[0], p_x_limbs[1]]).unwrap();
 
         let mut bytes = [0u8; 32];
@@ -51,21 +50,6 @@ pub fn tree_setup(range: u8, anchor: &G1Affine, a: &Fr) -> MerkleTree<PoseidonMe
         x.add_with_carry(&BigInteger256::one());
     }
     MerkleTree::<PoseidonMerkleHasher>::from_leaves(&leaves)
-}
-
-pub fn split_fq_to_fr<Fq, Fr>(fq_elem: &Fq) -> Vec<Fr>
-where
-    Fq: PrimeField,
-    Fr: PrimeField,
-{
-    let fq_bigint = fq_elem.into_bigint();
-    let bytes = fq_bigint.to_bytes_le();
-
-    let (low_bytes, high_bytes) = bytes.split_at(16);
-    let low_fr = Fr::from_le_bytes_mod_order(low_bytes);
-    let high_fr = Fr::from_le_bytes_mod_order(high_bytes);
-
-    vec![low_fr, high_fr]
 }
 
 fn sample_nums_generator(seed: &[u8]) -> G1Affine {
